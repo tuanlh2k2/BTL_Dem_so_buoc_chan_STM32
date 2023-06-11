@@ -14,7 +14,7 @@ float *CTR_MPU6050_getvalue;
 char CTR_datasend[32];
 int count = 0;
 float gtb_X = 0;
-float G_sum = 0, Gx = 0, Gz = 0, Gx_stop, Gz_stop;
+float G_sum = 0, Gx = 0, Gz = 0, Gy = 0, Gx_stop,Gy_stop, Gz_stop;
 int start = 0;
 uint32_t time_change_state = 0;
 
@@ -58,70 +58,52 @@ int main() {
 		if(STAGE == 1) {
 			I2C_MPU6050_Setup();
 			CTR_MPU6050_getvalue = CTR_READ_ACCEL_MPU6050();
-			Gx = CTR_MPU6050_getvalue[0];
-			Gz = CTR_MPU6050_getvalue[2];
-			
-			// ===========================================================================
-			G_sum = sqrt(pow(Gx, 2) + pow(Gz,2));
-			
-			// luu gia toc cua truc X va truc Z khi dang o trang thai dung yen.
-			if (start == 0 && G_sum < 0.96 )
-			{
-				Gx_stop = CTR_MPU6050_getvalue[0];
-				Gz_stop = CTR_MPU6050_getvalue[2];
-			}
-			
-			
-			if (start == 0 && 0.96 <= G_sum && G_sum <= 2)
-			{
-				start = 1;
-			}
-			
-			if (start == 1 && 0.96 <= G_sum && G_sum <= 2)
-			{
-				time_change_state ++;
-				gtb_X = sqrt(pow(Gx - Gx_stop, 2) + pow(Gz - Gz_stop, 2)) + gtb_X;
-				
-			}
-			
-			if ( start == 1 && G_sum < 0.96 )
-			{
-				gtb_X = gtb_X / time_change_state ;
 
-				if (gtb_X >= 0.1 && time_change_state >= 15)
-				{
-					count ++;
+			Gx = (CTR_MPU6050_getvalue[0] < 2) ? CTR_MPU6050_getvalue[0] : Gx;
+			Gy = (CTR_MPU6050_getvalue[1] < 2) ? CTR_MPU6050_getvalue[1] : Gx;
+			Gz = (CTR_MPU6050_getvalue[2] < 2) ? CTR_MPU6050_getvalue[2] : Gz;
+
+			G_sum = pow(Gx, 2) + pow(Gz, 2) + pow(Gy, 2);
+
+		if (start == 0) {
+			if (G_sum < 0.96) {
+        Gx_stop = CTR_MPU6050_getvalue[0];
+        Gy_stop = CTR_MPU6050_getvalue[1];
+        Gz_stop = CTR_MPU6050_getvalue[2];
+    } else if (0.97 <= G_sum) {
+        start = 1;
+    }
+		} else if (start == 1 && 0.97 <= G_sum) {
+				time_change_state++;
+				gtb_X = sqrt(pow(Gx - Gx_stop, 2) + pow(Gz - Gz_stop, 2) + pow(Gy - Gy_stop, 2)) + gtb_X;
+		} else if (start == 1 && G_sum <= 0.97) {
+				gtb_X = gtb_X / time_change_state;
+				if (gtb_X >= 0.2 && time_change_state >= 45) {
+					count++;
 					I2C_LCD_Setup();
 					I2C_LCD_Clear();
+					//I2C_LCD_NewLine();
+					//sprintf(CTR_datasend, "G_tb =  %.3f", gtb_X);
 					sprintf(CTR_datasend,"Buoc chan : %d", count);
 					I2C_LCD_Puts(CTR_datasend);
-					
 				}
+
 				time_change_state = 0;
 				gtb_X = 0;
 				start = 0;
-			}
-			
-			// -------------------------------------
-			
-			i++;
-			Delay_Ms(1);
-			
-			if ( i == 500)
-				// Sang den.
-				GPIOC -> BSRR |= (1 << 13);
-			if (i == 1000){
-				// Tat den.
-				GPIOC -> BSRR |= (1 << 29);
-				I2C_LCD_Setup();
-				sprintf(CTR_datasend,"Z=%.4f ",CTR_MPU6050_getvalue[2]);
-				I2C_LCD_NewLine();
-				I2C_LCD_Puts(CTR_datasend);
-				
+		}
+
+		i++;
+		Delay_Ms(1);
+
+		if (i == 500) {
+    // Sang den.
+				GPIOC->BSRR |= (1 << 13);
+		} else if (i == 1000) {
+    // Tat den.
+				GPIOC->BSRR |= (1 << 29);
 				i = 0;
-			}
-			
-			
+		}
 		} else if(STAGE == 0){
 			if(count != 0) {
 				count = 0;
